@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/gas_price.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
@@ -48,6 +49,33 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     await _fetchPrices();
+    await _checkBatteryOptimization();
+  }
+
+  Future<void> _checkBatteryOptimization() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool hasAsked = prefs.getBool('asked_battery_opt') ?? false;
+    if (hasAsked) return;
+
+    if (await Permission.ignoreBatteryOptimizations.isGranted) return;
+
+    if (!mounted) return;
+    bool? wantsBackground = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Real-Time Alerts'),
+        content: const Text('Do you want to receive push notifications for gas prices immediately even while your phone is deeply asleep?\n\n(This requires disabling Android battery optimization for GasWizard).'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
+        ],
+      )
+    );
+
+    if (wantsBackground == true) {
+      await Permission.ignoreBatteryOptimizations.request();
+    }
+    await prefs.setBool('asked_battery_opt', true);
   }
 
   Future<void> _fetchPrices() async {
