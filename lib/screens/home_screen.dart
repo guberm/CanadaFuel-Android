@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildCitySelector(),
           const SizedBox(height: 20),
           Text(_gasData!.cityName, style: Theme.of(context).textTheme.headlineMedium),
-          Text('Last Updated: ${_gasData!.lastUpdated}', style: TextStyle(color: Colors.grey)),
+          Text('Last Updated: ${_gasData!.lastUpdated}', style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 20),
           _buildPriceSection('Today', _gasData!.todayPrices),
           const SizedBox(height: 20),
