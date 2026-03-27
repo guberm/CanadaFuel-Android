@@ -1,4 +1,4 @@
-name: gas_wizard_app
+name: canadafuel
 description: "A new Flutter application to track gas prices in Canada."
 publish_to: 'none'
 version: 1.0.0+1

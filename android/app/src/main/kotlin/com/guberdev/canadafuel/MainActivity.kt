@@ -1,4 +1,4 @@
-package com.example.gas_wizard_app
+package com.guberdev.canadafuel
 
 import io.flutter.embedding.android.FlutterActivity
 
