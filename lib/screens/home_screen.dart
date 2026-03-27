@@ -48,7 +48,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _setDefaultCity(String slug) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('default_city', slug);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Default city set!')));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default city set!')));
   }
 
   @override

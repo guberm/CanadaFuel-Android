@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/gas_price.dart';
 
@@ -13,7 +14,7 @@ class ApiService {
         return data['cities'] ?? [];
       }
     } catch (e) {
-      print('Error fetching cities: $e');
+      debugPrint('Error fetching cities: $e');
     }
     return [];
   }
@@ -25,7 +26,7 @@ class ApiService {
         return CityGasData.fromJson(jsonDecode(response.body));
       }
     } catch (e) {
-      print('Error fetching city data for $slug: $e');
+      debugPrint('Error fetching city data for $slug: $e');
     }
     return null;
   }

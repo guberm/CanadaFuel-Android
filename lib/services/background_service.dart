@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_service.dart';
@@ -66,7 +67,7 @@ class BackgroundService {
       await prefs.setString('cached_prices_$slug', currentPricesHash);
 
     } catch (e) {
-      print('Background fetch failed: $e');
+      debugPrint('Background fetch failed: $e');
     }
   }
 }
