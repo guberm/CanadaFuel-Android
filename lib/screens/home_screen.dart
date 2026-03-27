@@ -67,6 +67,18 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('show_regular_only', val);
   }
 
+  String _formatDate(String isoString) {
+    try {
+      DateTime dt = DateTime.parse(isoString).toLocal();
+      int hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+      String amPm = dt.hour >= 12 ? 'PM' : 'AM';
+      String min = dt.minute.toString().padLeft(2, '0');
+      return '${dt.month}/${dt.day}/${dt.year} at $hour:$min $amPm';
+    } catch (_) {
+      return isoString;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildTopControls(),
           const SizedBox(height: 24),
           Text(_gasData!.cityName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: Colors.teal[900])),
-          Text('Last Updated: ${_gasData!.lastUpdated}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+          Text('Last Updated: ${_formatDate(_gasData!.lastUpdated)}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
           const SizedBox(height: 24),
           _buildPriceSection('Today', _gasData!.todayPrices),
           const SizedBox(height: 24),
