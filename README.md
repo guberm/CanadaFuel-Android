@@ -1,27 +1,14 @@
-# GasWizard App (Flutter)
+# GasWizard Canada ⛽🍁
 
-An Android application that checks the `canadafuel.guber.dev` API and notifies you about gas price changes in the background.
+<p align="center">
+  <img src="assets/icon/gaswizard_app_icon.png" width="300" alt="GasWizard Icon">
+</p>
 
-## Features
-- **Background Checks**: Uses `workmanager` to fetch API prices every hour even when closed.
-- **Local Notifications**: Pushes an alert via `flutter_local_notifications` if the price changes.
-- **Geolocation**: Automatically defaults to your geographically nearest city using `geolocator` if a default isn't selected.
+## Overview
+A dynamic Android application built in Flutter that actively tracks and caches Canadian gas prices city-by-city.
 
-## Getting Started
-
-Because the initial codebase was scaffolded in an environment without the Flutter SDK, the platform-specific folders (`android/`, `ios/`) have not been generated yet.
-
-To build the app, run the following commands on a machine with Flutter installed:
-
-```bash
-cd GasWizardApp
-# Generate the platform folders and link the pubspec dependencies
-flutter create .
-# Run the app on your connected device or emulator
-flutter run
-```
-
-## Permissions Needed
-When you first run the app on Android, make sure to grant the following system permissions when prompted:
-1. Location permissions (for finding the closest city).
-2. Notification permissions (Android 13+ requires explicit opt-in for notifications).
+**Key Features:**
+- 🔄 Background hourly Sync (WorkManager) matching prices against the `canadafuel.guber.dev` API.
+- 🔔 Real-time Local Notifications sent if prices increase or drop.
+- 📍 Geographic Location Tracking to automatically find your closest supported city upon boot. 
+- 🌙 Full native Light and Dark mode theme synchronization with your device.
