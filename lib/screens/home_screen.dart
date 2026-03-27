@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String? _selectedCitySlug;
+  String? _defaultCitySlug;
   bool _isLoading = true;
   bool _showRegularOnly = false;
   CityGasData? _gasData;
@@ -37,11 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initializeApp() async {
     _allCities = await ApiService.getAllCities();
     final prefs = await SharedPreferences.getInstance();
-    String? defaultCity = prefs.getString('default_city');
+    _defaultCitySlug = prefs.getString('default_city');
     _showRegularOnly = prefs.getBool('show_regular_only') ?? false;
 
-    if (defaultCity != null && defaultCity.isNotEmpty) {
-      _selectedCitySlug = defaultCity;
+    if (_defaultCitySlug != null && _defaultCitySlug!.isNotEmpty) {
+      _selectedCitySlug = _defaultCitySlug;
     } else {
       _selectedCitySlug = await LocationService.getNearestCitySlug();
     }
@@ -57,11 +58,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = false);
   }
 
-  Future<void> _setDefaultCity(String slug) async {
+  Future<void> _toggleDefaultCity() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('default_city', slug);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default city set!')));
+    if (_defaultCitySlug == _selectedCitySlug) {
+      await prefs.remove('default_city');
+      setState(() => _defaultCitySlug = null);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default city removed, location fallback restored!')));
+    } else if (_selectedCitySlug != null) {
+      await prefs.setString('default_city', _selectedCitySlug!);
+      setState(() => _defaultCitySlug = _selectedCitySlug);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default city set!')));
+    }
   }
 
   Future<void> _toggleRegularOnly(bool val) async {
@@ -166,11 +173,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.star, color: Colors.amber),
-                  tooltip: 'Set as Default',
-                  onPressed: () {
-                    if (_selectedCitySlug != null) _setDefaultCity(_selectedCitySlug!);
-                  },
+                  icon: Icon(
+                    _defaultCitySlug == _selectedCitySlug ? Icons.star : Icons.star_border, 
+                    color: Colors.amber
+                  ),
+                  tooltip: _defaultCitySlug == _selectedCitySlug ? 'Remove Default' : 'Set as Default',
+                  onPressed: _toggleDefaultCity,
                 )
               ],
             ),
