@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'screens/home_screen.dart';
 import 'services/background_service.dart';
@@ -32,18 +33,53 @@ void main() async {
   runApp(const GasWizardApp());
 }
 
-class GasWizardApp extends StatelessWidget {
+class GasWizardApp extends StatefulWidget {
   const GasWizardApp({super.key});
+
+  @override
+  State<GasWizardApp> createState() => _GasWizardAppState();
+}
+
+class _GasWizardAppState extends State<GasWizardApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool? isDark = prefs.getBool('is_dark_mode');
+    if (isDark != null && mounted) {
+      setState(() => _themeMode = isDark ? ThemeMode.dark : ThemeMode.light);
+    }
+  }
+
+  void _toggleTheme(bool isDark) async {
+    setState(() => _themeMode = isDark ? ThemeMode.dark : ThemeMode.light);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_dark_mode', isDark);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'GasWizard',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.light),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark),
+        useMaterial3: true,
+      ),
+      themeMode: _themeMode,
+      home: HomeScreen(
+        isDark: _themeMode == ThemeMode.dark || (_themeMode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark),
+        onThemeChanged: _toggleTheme,
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

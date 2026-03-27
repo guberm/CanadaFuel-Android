@@ -6,7 +6,10 @@ import '../services/api_service.dart';
 import '../services/location_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isDark;
+  final ValueChanged<bool> onThemeChanged;
+
+  const HomeScreen({super.key, required this.isDark, required this.onThemeChanged});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -82,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: widget.isDark ? null : Colors.grey[100],
       appBar: AppBar(
         title: const Text('GasWizard \uD83C\uDDE8\uD83C\uDDE6', style: TextStyle(fontWeight: FontWeight.w900)),
         centerTitle: true,
@@ -90,6 +93,10 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: Icon(widget.isDark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () => widget.onThemeChanged(!widget.isDark),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _fetchPrices,
@@ -114,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildTopControls(),
           const SizedBox(height: 24),
-          Text(_gasData!.cityName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: Colors.teal[900])),
+          Text(_gasData!.cityName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: widget.isDark ? Colors.teal[100] : Colors.teal[900])),
           Text('Last Updated: ${_formatDate(_gasData!.lastUpdated)}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
           const SizedBox(height: 24),
           _buildPriceSection('Today', _gasData!.todayPrices),
