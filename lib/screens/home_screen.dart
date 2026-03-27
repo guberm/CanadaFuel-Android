@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
             items: _allCities.map<DropdownMenuItem<String>>((c) {
               return DropdownMenuItem<String>(
                 value: c['slug'],
-                child: Text(c['name']),
+                child: Text(c['cityName']),
               );
             }).toList(),
             onChanged: (val) {
