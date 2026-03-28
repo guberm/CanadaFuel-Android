@@ -8,27 +8,44 @@ import 'services/background_service.dart';
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     await BackgroundService.initializeNotifications();
+
+    // Only notify if current hour matches user's preferred notification hour
+    // (or if no preference set, always run)
+    final prefs = await SharedPreferences.getInstance();
+    final preferredHour = prefs.getInt('notify_hour'); // null = always
+    if (preferredHour != null) {
+      final now = DateTime.now();
+      if (now.hour != preferredHour) {
+        return Future.value(true); // Skip silently
+      }
+    }
+
     await BackgroundService.fetchAndCheckPrices();
     return Future.value(true);
   });
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Setup Background Notifications
-  await BackgroundService.initializeNotifications();
-  
-  // Register Background Task (Runs roughly every 1 hour)
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+/// Call this whenever the user changes their notification hour preference.
+Future<void> rescheduleBackgroundTask() async {
+  await Workmanager().cancelByUniqueName("gasPricesCheck");
   Workmanager().registerPeriodicTask(
-    "1",
+    "gasPricesCheck",
     "fetchGasPrices",
     frequency: const Duration(hours: 1),
+    existingWorkPolicy: ExistingWorkPolicy.replace,
     constraints: Constraints(
       networkType: NetworkType.connected,
     ),
   );
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await BackgroundService.initializeNotifications();
+
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  await rescheduleBackgroundTask();
 
   runApp(const GasWizardApp());
 }
@@ -77,7 +94,9 @@ class _GasWizardAppState extends State<GasWizardApp> {
       ),
       themeMode: _themeMode,
       home: HomeScreen(
-        isDark: _themeMode == ThemeMode.dark || (_themeMode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark),
+        isDark: _themeMode == ThemeMode.dark ||
+            (_themeMode == ThemeMode.system &&
+                MediaQuery.of(context).platformBrightness == Brightness.dark),
         onThemeChanged: _toggleTheme,
       ),
       debugShowCheckedModeBanner: false,

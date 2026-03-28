@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../main.dart' show rescheduleBackgroundTask;
 import '../models/gas_price.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
@@ -23,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showRegularOnly = false;
   CityGasData? _gasData;
   List<dynamic> _allCities = [];
+  int? _notifyHour; // null = notify on every change check
 
   @override
   void initState() {
@@ -41,6 +43,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     _defaultCitySlug = prefs.getString('default_city');
     _showRegularOnly = prefs.getBool('show_regular_only') ?? false;
+    final savedHour = prefs.getInt('notify_hour');
+    if (mounted) setState(() => _notifyHour = savedHour);
 
     if (_defaultCitySlug != null && _defaultCitySlug!.isNotEmpty) {
       _selectedCitySlug = _defaultCitySlug;
@@ -50,6 +54,69 @@ class _HomeScreenState extends State<HomeScreen> {
     
     await _fetchPrices();
     await _checkBatteryOptimization();
+  }
+
+  Future<void> _openNotificationTimePicker() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Show dialog: Any time OR specific hour
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Notification Time'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('When do you want to receive gas price change notifications?'),
+                const SizedBox(height: 16),
+                RadioListTile<int?>(
+                  title: const Text('Any time (as soon as price changes)'),
+                  value: null,
+                  groupValue: _notifyHour,
+                  activeColor: Colors.teal,
+                  onChanged: (v) => setDialogState(() => _notifyHour = v),
+                ),
+                ...List.generate(24, (h) {
+                  final label = h == 0 ? '12:00 AM' : h < 12 ? '$h:00 AM' : h == 12 ? '12:00 PM' : '${h - 12}:00 PM';
+                  return RadioListTile<int?>(
+                    title: Text(label),
+                    value: h,
+                    groupValue: _notifyHour,
+                    activeColor: Colors.teal,
+                    onChanged: (v) => setDialogState(() => _notifyHour = v),
+                  );
+                }),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_notifyHour == null) {
+                    await prefs.remove('notify_hour');
+                  } else {
+                    await prefs.setInt('notify_hour', _notifyHour!);
+                  }
+                  setState(() {}); // refresh parent
+                  await rescheduleBackgroundTask();
+                  if (mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    final msg = _notifyHour == null
+                        ? 'You will be notified on every price change.'
+                        : 'Notifications set for ${_notifyHour! == 0 ? "12 AM" : _notifyHour! < 12 ? "${_notifyHour!} AM" : _notifyHour! == 12 ? "12 PM" : "${_notifyHour! - 12} PM"}';
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _checkBatteryOptimization() async {
@@ -131,6 +198,23 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(widget.isDark ? Icons.light_mode : Icons.dark_mode),
             onPressed: () => widget.onThemeChanged(!widget.isDark),
+          ),
+          IconButton(
+            tooltip: 'Notification Time',
+            icon: Stack(
+              children: [
+                const Icon(Icons.notifications),
+                if (_notifyHour != null)
+                  Positioned(
+                    right: 0, top: 0,
+                    child: Container(
+                      width: 8, height: 8,
+                      decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+                    ),
+                  )
+              ],
+            ),
+            onPressed: _openNotificationTimePicker,
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
