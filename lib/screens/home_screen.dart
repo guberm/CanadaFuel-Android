@@ -6,6 +6,7 @@ import '../main.dart' show rescheduleBackgroundTask;
 import '../models/gas_price.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isDark;
@@ -25,11 +26,38 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _allCities = [];
   int? _notifyHour;
 
+  BannerAd? _bannerAd;
+  bool _isAdLoaded = false;
+
+  void _loadBannerAd() {
+    _bannerAd = BannerAd(
+      adUnitId: 'ca-app-pub-7717654692073707/8237736835',
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _isAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('BannerAd failed to load: $err');
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
     _requestNotificationPermission();
     _initializeApp();
+    _loadBannerAd();
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -229,6 +257,15 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(),
+      bottomNavigationBar: _isAdLoaded && _bannerAd != null
+          ? SafeArea(
+              child: SizedBox(
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 

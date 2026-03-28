@@ -9,6 +9,12 @@
         android:label="CanadaFuel"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
+        
+        <!-- Google AdMob Application ID for CanadaFuel -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7717654692073707~1432655339"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

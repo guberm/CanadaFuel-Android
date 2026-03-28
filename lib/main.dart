@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'screens/home_screen.dart';
 import 'services/background_service.dart';
 
@@ -41,7 +42,7 @@ Future<void> rescheduleBackgroundTask() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  MobileAds.instance.initialize();
   await BackgroundService.initializeNotifications();
 
   Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
