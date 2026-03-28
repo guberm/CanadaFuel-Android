@@ -4,29 +4,26 @@ import 'package:http/http.dart' as http;
 import '../models/gas_price.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://canadafuel.guber.dev/api/gas-prices';
+  static const String _baseUrl =
+      'https://f57eh75qsf.execute-api.us-west-2.amazonaws.com/Prod/checkPrice';
 
-  static Future<List<dynamic>> getAllCities() async {
+  static const List<Map<String, String>> cities = [
+    {'slug': 'toronto', 'cityName': 'Toronto'},
+    {'slug': 'ottawa', 'cityName': 'Ottawa'},
+    {'slug': 'kitchener', 'cityName': 'Kitchener'},
+  ];
+
+  static List<dynamic> getAllCities() => cities;
+
+  static Future<GasPriceData?> getCityData(String slug) async {
     try {
-      final response = await http.get(Uri.parse(baseUrl));
+      final response =
+          await http.get(Uri.parse('$_baseUrl?city=$slug')).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['cities'] ?? [];
+        return GasPriceData.fromJson(jsonDecode(response.body), slug);
       }
     } catch (e) {
-      debugPrint('Error fetching cities: $e');
-    }
-    return [];
-  }
-
-  static Future<CityGasData?> getCityData(String slug) async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/$slug'));
-      if (response.statusCode == 200) {
-        return CityGasData.fromJson(jsonDecode(response.body));
-      }
-    } catch (e) {
-      debugPrint('Error fetching city data for $slug: $e');
+      debugPrint('Error fetching data for $slug: $e');
     }
     return null;
   }

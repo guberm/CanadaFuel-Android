@@ -21,10 +21,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedCitySlug;
   String? _defaultCitySlug;
   bool _isLoading = true;
-  bool _showRegularOnly = false;
-  CityGasData? _gasData;
+  GasPriceData? _gasData;
   List<dynamic> _allCities = [];
-  int? _notifyHour; // null = notify on every change check
+  int? _notifyHour;
 
   @override
   void initState() {
@@ -35,14 +34,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _requestNotificationPermission() async {
     final FlutterLocalNotificationsPlugin plugin = FlutterLocalNotificationsPlugin();
-    await plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    await plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
   }
 
   Future<void> _initializeApp() async {
-    _allCities = await ApiService.getAllCities();
+    _allCities = ApiService.getAllCities();
     final prefs = await SharedPreferences.getInstance();
     _defaultCitySlug = prefs.getString('default_city');
-    _showRegularOnly = prefs.getBool('show_regular_only') ?? false;
     final savedHour = prefs.getInt('notify_hour');
     if (mounted) setState(() => _notifyHour = savedHour);
 
@@ -51,92 +51,30 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       _selectedCitySlug = await LocationService.getNearestCitySlug();
     }
-    
+
     await _fetchPrices();
     await _checkBatteryOptimization();
-  }
-
-  Future<void> _openNotificationTimePicker() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Show dialog: Any time OR specific hour
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            title: const Text('Notification Time'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('When do you want to receive gas price change notifications?'),
-                const SizedBox(height: 16),
-                RadioListTile<int?>(
-                  title: const Text('Any time (as soon as price changes)'),
-                  value: null,
-                  groupValue: _notifyHour,
-                  activeColor: Colors.teal,
-                  onChanged: (v) => setDialogState(() => _notifyHour = v),
-                ),
-                ...List.generate(24, (h) {
-                  final label = h == 0 ? '12:00 AM' : h < 12 ? '$h:00 AM' : h == 12 ? '12:00 PM' : '${h - 12}:00 PM';
-                  return RadioListTile<int?>(
-                    title: Text(label),
-                    value: h,
-                    groupValue: _notifyHour,
-                    activeColor: Colors.teal,
-                    onChanged: (v) => setDialogState(() => _notifyHour = v),
-                  );
-                }),
-              ],
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              ElevatedButton(
-                onPressed: () async {
-                  if (_notifyHour == null) {
-                    await prefs.remove('notify_hour');
-                  } else {
-                    await prefs.setInt('notify_hour', _notifyHour!);
-                  }
-                  setState(() {}); // refresh parent
-                  await rescheduleBackgroundTask();
-                  if (mounted) Navigator.pop(ctx);
-                  if (mounted) {
-                    final msg = _notifyHour == null
-                        ? 'You will be notified on every price change.'
-                        : 'Notifications set for ${_notifyHour! == 0 ? "12 AM" : _notifyHour! < 12 ? "${_notifyHour!} AM" : _notifyHour! == 12 ? "12 PM" : "${_notifyHour! - 12} PM"}';
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   Future<void> _checkBatteryOptimization() async {
     final prefs = await SharedPreferences.getInstance();
     bool hasAsked = prefs.getBool('asked_battery_opt') ?? false;
     if (hasAsked) return;
-
     if (await Permission.ignoreBatteryOptimizations.isGranted) return;
-
     if (!mounted) return;
+
     bool? wantsBackground = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Real-Time Alerts'),
-        content: const Text('Do you want to receive push notifications for gas prices immediately even while your phone is deeply asleep?\n\n(This requires disabling Android battery optimization for GasWizard).'),
+        content: const Text(
+            'Do you want to receive gas price notifications even while your phone is deeply asleep?\n\n'
+            '(This requires disabling Android battery optimization for this app.)'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
         ],
-      )
+      ),
     );
 
     if (wantsBackground == true) {
@@ -158,38 +96,106 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_defaultCitySlug == _selectedCitySlug) {
       await prefs.remove('default_city');
       setState(() => _defaultCitySlug = null);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default city removed, location fallback restored!')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Default city removed. Using GPS now.')));
+      }
     } else if (_selectedCitySlug != null) {
       await prefs.setString('default_city', _selectedCitySlug!);
       setState(() => _defaultCitySlug = _selectedCitySlug);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default city set!')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Default city set!')));
+      }
     }
   }
 
-  Future<void> _toggleRegularOnly(bool val) async {
-    setState(() => _showRegularOnly = val);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_regular_only', val);
+  String _hourLabel(int h) {
+    if (h == 0) return '12:00 AM';
+    if (h < 12) return '$h:00 AM';
+    if (h == 12) return '12:00 PM';
+    return '${h - 12}:00 PM';
   }
 
-  String _formatDate(String isoString) {
-    try {
-      DateTime dt = DateTime.parse(isoString).toLocal();
-      int hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-      String amPm = dt.hour >= 12 ? 'PM' : 'AM';
-      String min = dt.minute.toString().padLeft(2, '0');
-      return '${dt.month}/${dt.day}/${dt.year} at $hour:$min $amPm';
-    } catch (_) {
-      return isoString;
-    }
+  Future<void> _openNotificationTimePicker() async {
+    int? tempHour = _notifyHour;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Notification Time'),
+            // ✅ Fixed: content is now scrollable
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('When should we check for gas price changes?'),
+                    const SizedBox(height: 8),
+                    RadioListTile<int?>(
+                      title: const Text('Any time (check every hour)'),
+                      subtitle: const Text('Notified as soon as price changes'),
+                      value: null,
+                      groupValue: tempHour,
+                      activeColor: Colors.teal,
+                      onChanged: (v) => setDialogState(() => tempHour = v),
+                    ),
+                    const Divider(),
+                    ...List.generate(24, (h) {
+                      return RadioListTile<int?>(
+                        title: Text(_hourLabel(h)),
+                        value: h,
+                        groupValue: tempHour,
+                        activeColor: Colors.teal,
+                        onChanged: (v) => setDialogState(() => tempHour = v),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () async {
+                  setState(() => _notifyHour = tempHour);
+                  final prefs = await SharedPreferences.getInstance();
+                  if (tempHour == null) {
+                    await prefs.remove('notify_hour');
+                  } else {
+                    await prefs.setInt('notify_hour', tempHour!);
+                  }
+                  await rescheduleBackgroundTask();
+                  if (mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    final msg = tempHour == null
+                        ? 'Notifications: every price change'
+                        : 'Notifications scheduled at ${_hourLabel(tempHour!)}';
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
+
+  String _cityName(String slug) => ApiService.cities
+      .firstWhere((c) => c['slug'] == slug, orElse: () => {'cityName': slug})['cityName']!;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: widget.isDark ? null : Colors.grey[100],
       appBar: AppBar(
-        title: const Text('GasWizard \uD83C\uDDE8\uD83C\uDDE6', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: const Text('CanadaFuel 🇨🇦', style: TextStyle(fontWeight: FontWeight.w900)),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.teal,
@@ -209,28 +215,41 @@ class _HomeScreenState extends State<HomeScreen> {
                     right: 0, top: 0,
                     child: Container(
                       width: 8, height: 8,
-                      decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                          color: Colors.amber, shape: BoxShape.circle),
                     ),
-                  )
+                  ),
               ],
             ),
             onPressed: _openNotificationTimePicker,
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchPrices,
-          )
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchPrices),
         ],
       ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator()) 
-        : _buildContent(),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildContent(),
     );
   }
 
   Widget _buildContent() {
     if (_gasData == null) {
-      return const Center(child: Text('Failed to load data.'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.signal_wifi_off, size: 60, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('Failed to load prices.', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+              onPressed: _fetchPrices,
+            ),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(
@@ -238,154 +257,162 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildTopControls(),
-          const SizedBox(height: 24),
-          Text(_gasData!.cityName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: widget.isDark ? Colors.teal[100] : Colors.teal[900])),
-          Text('Last Updated: ${_formatDate(_gasData!.lastUpdated)}', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 24),
-          _buildPriceSection('Today', _gasData!.todayPrices),
-          const SizedBox(height: 24),
-          _buildPriceSection('Tomorrow', _gasData!.tomorrowPrices),
+          _buildCitySelector(),
+          const SizedBox(height: 20),
+          _buildPriceCards(),
           const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  Widget _buildTopControls() {
+  Widget _buildCitySelector() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      icon: const Icon(Icons.location_city, color: Colors.teal),
-                      value: _selectedCitySlug,
-                      hint: const Text('Select City', style: TextStyle(fontWeight: FontWeight.bold)),
-                      items: _allCities.map<DropdownMenuItem<String>>((c) {
-                        return DropdownMenuItem<String>(
-                          value: c['slug'],
-                          child: Text(c['cityName'], style: const TextStyle(fontWeight: FontWeight.w600)),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedCitySlug = val);
-                          _fetchPrices();
-                        }
-                      },
-                    ),
-                  ),
+            Expanded(
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  icon: const Icon(Icons.location_city, color: Colors.teal),
+                  value: _selectedCitySlug,
+                  hint: const Text('Select City',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  items: _allCities.map<DropdownMenuItem<String>>((c) {
+                    return DropdownMenuItem<String>(
+                      value: c['slug'],
+                      child: Text(c['cityName']!,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _selectedCitySlug = val);
+                      _fetchPrices();
+                    }
+                  },
                 ),
-                IconButton(
-                  icon: Icon(
-                    _defaultCitySlug == _selectedCitySlug ? Icons.star : Icons.star_border, 
-                    color: Colors.amber
-                  ),
-                  tooltip: _defaultCitySlug == _selectedCitySlug ? 'Remove Default' : 'Set as Default',
-                  onPressed: _toggleDefaultCity,
-                )
-              ],
+              ),
             ),
-            const Divider(),
-            SwitchListTile(
-              title: const Text('Show Regular Gas Only', style: TextStyle(fontWeight: FontWeight.w600)),
-              contentPadding: EdgeInsets.zero,
-              activeColor: Colors.teal,
-              value: _showRegularOnly,
-              onChanged: _toggleRegularOnly,
-            )
+            IconButton(
+              icon: Icon(
+                _defaultCitySlug == _selectedCitySlug
+                    ? Icons.star
+                    : Icons.star_border,
+                color: Colors.amber,
+              ),
+              tooltip: _defaultCitySlug == _selectedCitySlug
+                  ? 'Remove Default'
+                  : 'Set as Default',
+              onPressed: _toggleDefaultCity,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPriceSection(String title, List<GasPriceEntry> prices) {
-    if (prices.isEmpty) return const SizedBox.shrink();
+  Widget _buildPriceCards() {
+    final data = _gasData!;
+    final change = data.priceChangeCents;
+    final isUp = change > 0;
+    final isDown = change < 0;
+    final changeColor = isDown ? Colors.green : (isUp ? Colors.red : Colors.grey);
+    final changeIcon = isDown
+        ? Icons.arrow_downward
+        : (isUp ? Icons.arrow_upward : Icons.remove);
+    final changeLabel = change == 0
+        ? 'No change'
+        : '${isUp ? '+' : ''}${change}¢';
 
-    var displayPrices = _showRegularOnly 
-        ? prices.where((p) => p.fuelType.toLowerCase().contains('regular')).toList() 
-        : prices;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              _cityName(_selectedCitySlug ?? ''),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: widget.isDark ? Colors.teal[100] : Colors.teal[900],
+                  ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: changeColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20)),
+              child: Row(
+                children: [
+                  Icon(changeIcon, size: 16, color: changeColor),
+                  const SizedBox(width: 4),
+                  Text(changeLabel,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: changeColor,
+                          fontSize: 14)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _dayCard('Today', data.priceToday, isMain: true),
+        const SizedBox(height: 12),
+        _dayCard('Tomorrow', data.priceTomorrow),
+        const SizedBox(height: 12),
+        _dayCard('Day After Tomorrow', data.priceDayAfterTomorrow),
+      ],
+    );
+  }
 
-    if (displayPrices.isEmpty) {
-      return Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text('No Regular prices found for $title', style: const TextStyle(color: Colors.grey)),
-        )
-      );
-    }
-
+  Widget _dayCard(String label, double price, {bool isMain = false}) {
     return Card(
-      elevation: 4,
+      elevation: isMain ? 6 : 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(20),
+        child: Row(
           children: [
-            Row(
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(isMain ? 0.2 : 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isMain ? Icons.local_gas_station : Icons.event,
+                color: Colors.teal,
+                size: isMain ? 28 : 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(title == 'Today' ? Icons.calendar_today : Icons.event, color: Colors.teal),
-                const SizedBox(width: 8),
-                Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.teal)),
+                Text(label,
+                    style: TextStyle(
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(
+                  '${price.toStringAsFixed(1)}¢/L',
+                  style: TextStyle(
+                    fontSize: isMain ? 28 : 22,
+                    fontWeight: FontWeight.w900,
+                    color: isMain
+                        ? (widget.isDark ? Colors.teal[100] : Colors.teal[900])
+                        : null,
+                  ),
+                ),
               ],
             ),
-            const Divider(thickness: 1.5, height: 24),
-            ...displayPrices.map((p) {
-              bool isDown = p.change.contains('-');
-              bool isUp = !isDown && p.change.contains('+') || (!isDown && (double.tryParse(p.change.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0) > 0);
-              
-              Color changeColor = isDown ? Colors.green : (isUp ? Colors.red : Colors.grey);
-              IconData changeIcon = isDown ? Icons.arrow_downward : (isUp ? Icons.arrow_upward : Icons.remove);
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: Colors.teal.withOpacity(0.1), shape: BoxShape.circle),
-                          child: const Icon(Icons.local_gas_station, color: Colors.teal, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(p.fuelType, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Text('${p.priceCentsPerLitre}¢', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: changeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                          child: Row(
-                            children: [
-                              Icon(changeIcon, size: 14, color: changeColor),
-                              const SizedBox(width: 2),
-                              Text(p.change, style: TextStyle(color: changeColor, fontWeight: FontWeight.w900)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            }),
           ],
         ),
       ),

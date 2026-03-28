@@ -83,7 +83,7 @@ class _GasWizardAppState extends State<GasWizardApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GasWizard',
+      title: 'CanadaFuel',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.light),
         useMaterial3: true,

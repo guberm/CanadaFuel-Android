@@ -1,69 +1,36 @@
-class GasPriceEntry {
-  final String fuelType;
-  final double priceCentsPerLitre;
-  final String change;
-  final String date;
+class GasPriceData {
+  final double priceToday;
+  final double priceTomorrow;
+  final double priceDayAfterTomorrow;
+  final int priceChangeCents; // positive = up, negative = down
+  final String city;
 
-  GasPriceEntry({
-    required this.fuelType,
-    required this.priceCentsPerLitre,
-    required this.change,
-    required this.date,
+  GasPriceData({
+    required this.priceToday,
+    required this.priceTomorrow,
+    required this.priceDayAfterTomorrow,
+    required this.priceChangeCents,
+    required this.city,
   });
 
-  factory GasPriceEntry.fromJson(Map<String, dynamic> json) {
-    return GasPriceEntry(
-      fuelType: json['fuelType'],
-      priceCentsPerLitre: (json['priceCentsPerLitre'] as num).toDouble(),
-      change: json['change'],
-      date: json['date'],
+  factory GasPriceData.fromJson(Map<String, dynamic> json, String city) {
+    return GasPriceData(
+      priceToday: (json['priceToday'] as num?)?.toDouble() ?? 0.0,
+      priceTomorrow: (json['priceTomorrow'] as num?)?.toDouble() ?? 
+                     (json['priceToday'] as num?)?.toDouble() ?? 0.0,
+      priceDayAfterTomorrow: (json['priceDayAfterTomorrow'] as num?)?.toDouble() ?? 
+                             (json['priceTomorrow'] as num?)?.toDouble() ?? 
+                             (json['priceToday'] as num?)?.toDouble() ?? 0.0,
+      priceChangeCents: int.tryParse(json['priceChangeCents']?.toString() ?? '') ?? 0,
+      city: city,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'fuelType': fuelType,
-        'priceCentsPerLitre': priceCentsPerLitre,
-        'change': change,
-        'date': date,
-      };
-}
-
-class CityGasData {
-  final String cityName;
-  final String slug;
-  final String lastUpdated;
-  final String currentAverage;
-  final List<GasPriceEntry> todayPrices;
-  final List<GasPriceEntry> tomorrowPrices;
-
-  CityGasData({
-    required this.cityName,
-    required this.slug,
-    required this.lastUpdated,
-    required this.currentAverage,
-    required this.todayPrices,
-    required this.tomorrowPrices,
-  });
-
-  factory CityGasData.fromJson(Map<String, dynamic> json) {
-    var todayList = json['todayPrices'] as List? ?? [];
-    var tomorrowList = json['tomorrowPrices'] as List? ?? [];
-    return CityGasData(
-      cityName: json['cityName'],
-      slug: json['slug'],
-      lastUpdated: json['lastUpdated'],
-      currentAverage: json['currentAverage'] ?? '',
-      todayPrices: todayList.map((e) => GasPriceEntry.fromJson(e)).toList(),
-      tomorrowPrices: tomorrowList.map((e) => GasPriceEntry.fromJson(e)).toList(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'cityName': cityName,
-        'slug': slug,
-        'lastUpdated': lastUpdated,
-        'currentAverage': currentAverage,
-        'todayPrices': todayPrices.map((e) => e.toJson()).toList(),
-        'tomorrowPrices': tomorrowPrices.map((e) => e.toJson()).toList(),
+        'priceToday': priceToday,
+        'priceTomorrow': priceTomorrow,
+        'priceDayAfterTomorrow': priceDayAfterTomorrow,
+        'priceChangeCents': priceChangeCents,
+        'city': city,
       };
 }

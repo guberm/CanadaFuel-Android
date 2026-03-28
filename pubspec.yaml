@@ -1,7 +1,7 @@
 name: canadafuel
 description: "A new Flutter application to track gas prices in Canada."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.2.0+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -26,7 +26,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon/gaswizard_app_icon.png"
+  image_path: "icon.png"
+  adaptive_icon_background: "#009688"
+  adaptive_icon_foreground: "icon.png"
   min_sdk_android: 21
 
 flutter:
