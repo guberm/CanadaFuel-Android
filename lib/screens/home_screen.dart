@@ -55,9 +55,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _requestNotificationPermission();
-    _initializeApp();
+    _startUp();
     _loadBannerAd();
+  }
+
+  Future<void> _startUp() async {
+    await _requestNotificationPermission();
+    await _initializeApp();
   }
 
   Future<void> _requestNotificationPermission() async {

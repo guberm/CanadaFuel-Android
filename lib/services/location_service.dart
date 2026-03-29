@@ -18,15 +18,15 @@ class LocationService {
 
   static Future<String> getNearestCitySlug() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return 'toronto';
-
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) return 'toronto';
       }
       if (permission == LocationPermission.deniedForever) return 'toronto';
+
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return 'toronto';
 
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.low,
