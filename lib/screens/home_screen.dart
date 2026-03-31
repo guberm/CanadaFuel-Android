@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String? _selectedCitySlug;
   String? _defaultCitySlug;
+  String _selectedFuelType = 'Regular';
   bool _isLoading = true;
   GasPriceData? _gasData;
   List<dynamic> _allCities = [];
@@ -76,7 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     _defaultCitySlug = prefs.getString('default_city');
     final savedHour = prefs.getInt('notify_hour');
-    if (mounted) setState(() => _notifyHour = savedHour);
+    final savedFuel = prefs.getString('default_fuel_type') ?? 'Regular';
+    if (mounted) {
+      setState(() {
+        _notifyHour = savedHour;
+        _selectedFuelType = savedFuel;
+      });
+    }
 
     if (_defaultCitySlug != null && _defaultCitySlug!.isNotEmpty) {
       _selectedCitySlug = _defaultCitySlug;
@@ -219,6 +226,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _setDefaultFuelType(String type) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('default_fuel_type', type);
+    setState(() => _selectedFuelType = type);
+  }
+
   String _cityName(String slug) => ApiService.cities
       .firstWhere((c) => c['slug'] == slug, orElse: () => {'cityName': slug})['cityName']!;
 
@@ -312,44 +325,70 @@ class _HomeScreenState extends State<HomeScreen> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  icon: const Icon(Icons.location_city, color: Colors.teal),
-                  value: _selectedCitySlug,
-                  hint: const Text('Select City',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  items: _allCities.map<DropdownMenuItem<String>>((c) {
-                    return DropdownMenuItem<String>(
-                      value: c['slug'],
-                      child: Text(c['cityName']!,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _selectedCitySlug = val);
-                      _fetchPrices();
-                    }
-                  },
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      icon: const Icon(Icons.location_city, color: Colors.teal),
+                      value: _selectedCitySlug,
+                      hint: const Text('Select City',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      items: _allCities.map<DropdownMenuItem<String>>((c) {
+                        return DropdownMenuItem<String>(
+                          value: c['slug'],
+                          child: Text(c['cityName']!,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedCitySlug = val);
+                          _fetchPrices();
+                        }
+                      },
+                    ),
+                  ),
                 ),
-              ),
+                IconButton(
+                  icon: Icon(
+                    _defaultCitySlug == _selectedCitySlug
+                        ? Icons.star
+                        : Icons.star_border,
+                    color: Colors.amber,
+                  ),
+                  tooltip: _defaultCitySlug == _selectedCitySlug
+                      ? 'Remove Default'
+                      : 'Set as Default',
+                  onPressed: _toggleDefaultCity,
+                ),
+              ],
             ),
-            IconButton(
-              icon: Icon(
-                _defaultCitySlug == _selectedCitySlug
-                    ? Icons.star
-                    : Icons.star_border,
-                color: Colors.amber,
-              ),
-              tooltip: _defaultCitySlug == _selectedCitySlug
-                  ? 'Remove Default'
-                  : 'Set as Default',
-              onPressed: _toggleDefaultCity,
+            const SizedBox(height: 4),
+            Row(
+              children: ['Regular', 'Premium', 'Diesel'].map((type) {
+                final isSelected = _selectedFuelType == type;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(type),
+                    selected: isSelected,
+                    onSelected: (_) => _setDefaultFuelType(type),
+                    selectedColor: Colors.teal,
+                    checkmarkColor: Colors.white,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : null,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ],
         ),
@@ -357,9 +396,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  int _changeForFuelType(GasPriceData data, String fuelType) {
+    try {
+      final fp = data.tomorrowPrices.firstWhere((p) => p.fuelType == fuelType);
+      return int.tryParse(fp.change.replaceAll('¢', '').trim()) ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Widget _buildPriceCards() {
     final data = _gasData!;
-    final change = data.priceChangeCents;
+    final change = _changeForFuelType(data, _selectedFuelType);
     final isUp = change > 0;
     final isDown = change < 0;
     final changeColor = isDown ? Colors.green : (isUp ? Colors.red : Colors.grey);
@@ -386,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                  color: changeColor.withOpacity(0.1),
+                  color: changeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20)),
               child: Row(
                 children: [
@@ -403,59 +451,99 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         const SizedBox(height: 20),
-        _dayCard('Today', data.priceToday, isMain: true),
+        _dayCard('Today', data.todayPrices, isMain: true),
         const SizedBox(height: 12),
-        _dayCard('Tomorrow', data.priceTomorrow),
-        const SizedBox(height: 12),
-        _dayCard('Day After Tomorrow', data.priceDayAfterTomorrow),
+        _dayCard('Tomorrow', data.tomorrowPrices),
       ],
     );
   }
 
-  Widget _dayCard(String label, double price, {bool isMain = false}) {
+  Widget _dayCard(String label, List<FuelPrice> prices, {bool isMain = false}) {
     return Card(
       elevation: isMain ? 6 : 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(isMain ? 0.2 : 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isMain ? Icons.local_gas_station : Icons.event,
-                color: Colors.teal,
-                size: isMain ? 28 : 22,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withValues(alpha: isMain ? 0.2 : 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isMain ? Icons.local_gas_station : Icons.event,
+                    color: Colors.teal,
+                    size: isMain ? 28 : 22,
+                  ),
+                ),
+                const SizedBox(width: 16),
                 Text(label,
                     style: TextStyle(
                         color: Colors.grey[600],
                         fontWeight: FontWeight.w600,
                         fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(
-                  '${price.toStringAsFixed(1)}¢/L',
-                  style: TextStyle(
-                    fontSize: isMain ? 28 : 22,
-                    fontWeight: FontWeight.w900,
-                    color: isMain
-                        ? (widget.isDark ? Colors.teal[100] : Colors.teal[900])
-                        : null,
-                  ),
-                ),
               ],
             ),
+            const SizedBox(height: 16),
+            ...prices.map((fp) => _fuelRow(fp, isMain: isMain)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _fuelRow(FuelPrice fp, {bool isMain = false}) {
+    final isSelected = fp.fuelType == _selectedFuelType;
+    final changeColor = fp.change.startsWith('+')
+        ? Colors.red
+        : (fp.change.startsWith('-') ? Colors.green : Colors.grey);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: isSelected
+          ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4)
+          : const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+      decoration: isSelected
+          ? BoxDecoration(
+              color: Colors.teal.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            )
+          : null,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(fp.fuelType,
+              style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: isMain ? 15 : 14,
+                  color: isSelected ? Colors.teal[700] : Colors.grey[700])),
+          Row(
+            children: [
+              Text(
+                '${fp.priceCentsPerLitre.toStringAsFixed(1)}¢/L',
+                style: TextStyle(
+                  fontSize: isMain ? 22 : 18,
+                  fontWeight: FontWeight.w900,
+                  color: isSelected || isMain
+                      ? (widget.isDark ? Colors.teal[100] : Colors.teal[900])
+                      : null,
+                ),
+              ),
+              if (fp.change.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(fp.change,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: changeColor)),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
