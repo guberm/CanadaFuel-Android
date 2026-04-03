@@ -6,6 +6,10 @@ import '../models/gas_price.dart';
 class ApiService {
   static const String _baseUrl = 'https://canadafuel.guber.dev/api/gas-prices';
 
+  // In-memory cache: slug → data, invalidated when server scrape time changes
+  static final Map<String, GasPriceData> _cityCache = {};
+  static DateTime? _lastKnownScrapeTime;
+
   static const List<Map<String, String>> cities = [
     {'slug': 'toronto', 'cityName': 'Toronto'},
     {'slug': 'montreal', 'cityName': 'Montreal'},
@@ -49,16 +53,58 @@ class ApiService {
 
   static List<dynamic> getAllCities() => cities;
 
-  static Future<GasPriceData?> getCityData(String slug) async {
+  /// Returns the server's last scrape time. Returns null on error.
+  static Future<DateTime?> getServerScrapeTime() async {
     try {
-      final response =
-          await http.get(Uri.parse('$_baseUrl/$slug')).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(Uri.parse('$_baseUrl/status'))
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
-        return GasPriceData.fromJson(jsonDecode(response.body));
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final raw = json['lastScrapeTime'] as String?;
+        if (raw != null) return DateTime.parse(raw);
+      }
+    } catch (e) {
+      debugPrint('Status check failed: $e');
+    }
+    return null;
+  }
+
+  /// Fetches city data, using cache if the server hasn't scraped since last fetch.
+  /// Pass [forceRefresh] to skip the cache entirely.
+  static Future<GasPriceData?> getCityData(String slug, {bool forceRefresh = false}) async {
+    if (!forceRefresh && _cityCache.containsKey(slug)) {
+      debugPrint('Cache hit for $slug');
+      return _cityCache[slug];
+    }
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/$slug'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = GasPriceData.fromJson(jsonDecode(response.body));
+        _cityCache[slug] = data;
+        return data;
       }
     } catch (e) {
       debugPrint('Error fetching data for $slug: $e');
     }
-    return null;
+    // Return stale cache on error rather than nothing
+    return _cityCache[slug];
+  }
+
+  /// Checks if the server has new data since last known scrape time.
+  /// If so, clears the cache and returns true. Returns false if data is current.
+  static Future<bool> checkForNewData() async {
+    final serverTime = await getServerScrapeTime();
+    if (serverTime == null) return false;
+    if (_lastKnownScrapeTime == null || serverTime.isAfter(_lastKnownScrapeTime!)) {
+      _lastKnownScrapeTime = serverTime;
+      _cityCache.clear();
+      debugPrint('New server data detected (scraped at $serverTime), cache cleared');
+      return true;
+    }
+    debugPrint('No new data since $_lastKnownScrapeTime');
+    return false;
   }
 }

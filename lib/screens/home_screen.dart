@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -27,6 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _allCities = [];
   int? _notifyHour;
 
+  DateTime? _lastRefreshed;
+  Timer? _hourlyTimer;
+
   BannerAd? _bannerAd;
   bool _isAdLoaded = false;
 
@@ -49,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _hourlyTimer?.cancel();
     _bannerAd?.dispose();
     super.dispose();
   }
@@ -63,6 +68,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startUp() async {
     await _requestNotificationPermission();
     await _initializeApp();
+    _startHourlyTimer();
+  }
+
+  void _startHourlyTimer() {
+    _hourlyTimer = Timer.periodic(const Duration(hours: 1), (_) async {
+      final hasNew = await ApiService.checkForNewData();
+      if (hasNew) _fetchPrices();
+    });
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -122,12 +135,15 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('asked_battery_opt', true);
   }
 
-  Future<void> _fetchPrices() async {
+  Future<void> _fetchPrices({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
     if (_selectedCitySlug != null) {
-      _gasData = await ApiService.getCityData(_selectedCitySlug!);
+      _gasData = await ApiService.getCityData(_selectedCitySlug!, forceRefresh: forceRefresh);
     }
-    setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = false;
+      _lastRefreshed = DateTime.now();
+    });
   }
 
   Future<void> _toggleDefaultCity() async {
@@ -240,7 +256,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: widget.isDark ? null : Colors.grey[100],
       appBar: AppBar(
-        title: const Text('CanadaFuel 🇨🇦', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: Column(
+          children: [
+            const Text('CanadaFuel 🇨🇦', style: TextStyle(fontWeight: FontWeight.w900)),
+            if (_lastRefreshed != null)
+              Text(
+                'Updated ${_lastRefreshed!.hour.toString().padLeft(2, '0')}:${_lastRefreshed!.minute.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
+              ),
+          ],
+        ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.teal,
@@ -268,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             onPressed: _openNotificationTimePicker,
           ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchPrices),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: () => _fetchPrices(forceRefresh: true)),
         ],
       ),
       body: _isLoading
@@ -451,14 +476,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         const SizedBox(height: 20),
-        _dayCard('Today', data.todayPrices, isMain: true),
+        _dayCard('Today', data.todayPrices, date: DateTime.now(), isMain: true),
         const SizedBox(height: 12),
-        _dayCard('Tomorrow', data.tomorrowPrices),
+        _dayCard('Tomorrow', data.tomorrowPrices, date: DateTime.now().add(const Duration(days: 1))),
       ],
     );
   }
 
-  Widget _dayCard(String label, List<FuelPrice> prices, {bool isMain = false}) {
+  Widget _dayCard(String label, List<FuelPrice> prices, {DateTime? date, bool isMain = false}) {
+    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final dateStr = date != null ? '${months[date.month - 1]} ${date.day}' : null;
     return Card(
       elevation: isMain ? 6 : 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -482,11 +509,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                Text(label,
-                    style: TextStyle(
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: TextStyle(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                    if (dateStr != null)
+                      Text(dateStr,
+                          style: TextStyle(
+                              color: Colors.grey[400],
+                              fontWeight: FontWeight.w400,
+                              fontSize: 11)),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 16),
